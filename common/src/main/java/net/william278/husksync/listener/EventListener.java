@@ -11,10 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
@@ -22,6 +19,8 @@ import java.util.logging.Level;
  * Handles what should happen when events are fired
  */
 public abstract class EventListener {
+
+    private final ExecutorService executor = Executors.newFixedThreadPool(20);
 
     /**
      * The plugin instance
@@ -55,9 +54,11 @@ public abstract class EventListener {
         if (user.isNpc()) {
             return;
         }
-
+        long timestamp = System.currentTimeMillis();
+        plugin.log(Level.INFO, "Starting handling player join [HS]" + user.username);
         lockedPlayers.add(user.uuid);
-        CompletableFuture.runAsync(() -> {
+
+        executor.execute(() -> {
             try {
                 // Hold reading data for the network latency threshold, to ensure the source server has set the redis key
                 Thread.sleep(Math.max(0, plugin.getSettings().networkLatencyMilliseconds));
@@ -68,9 +69,11 @@ public abstract class EventListener {
                     if (!changingServers) {
                         // Fetch from the database if the user isn't changing servers
                         setUserFromDatabase(user).thenAccept(succeeded -> handleSynchronisationCompletion(user, succeeded));
+                        plugin.log(Level.INFO, "Completed handling player who join for first time with value"
+                                + (System.currentTimeMillis() - timestamp) + "ms [HS]" + user.username);
                     } else {
                         final int TIME_OUT_MILLISECONDS = 3200;
-                        CompletableFuture.runAsync(() -> {
+                        executor.execute((() -> {
                             final AtomicInteger currentMilliseconds = new AtomicInteger(0);
                             final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
@@ -91,14 +94,17 @@ public abstract class EventListener {
                                             user.setData(redisData, plugin)
                                                     .thenAccept(succeeded -> handleSynchronisationCompletion(user, succeeded)).join();
                                             executor.shutdown();
+                                            plugin.log(Level.INFO, "Completed handling player who was switching servers with value "
+                                                    + (System.currentTimeMillis() - timestamp) + "ms [HS]" + user.username);
                                         })).join();
                                 currentMilliseconds.addAndGet(200);
                             }, 0, 200L, TimeUnit.MILLISECONDS);
-                        });
+                        }));
                     }
                 });
             }
         });
+
     }
 
     /**

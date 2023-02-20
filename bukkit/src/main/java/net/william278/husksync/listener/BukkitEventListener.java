@@ -22,6 +22,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.WorldSaveEvent;
@@ -148,6 +149,15 @@ public class BukkitEventListener extends EventListener implements BukkitJoinEven
         if (event.getEntity() instanceof Player player) {
             event.setCancelled(cancelPlayerEvent(player.getUniqueId()));
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerChat(@NotNull AsyncPlayerChatEvent event) {
+        if(super.getLockedPlayers().contains(event.getPlayer().getUniqueId())) {
+            event.setCancelled(cancelPlayerEvent(event.getPlayer().getUniqueId()));
+            event.getPlayer().sendMessage("Twoje dane jeszcze nie zostały zsynchronizowane. Poczekaj zanim będziesz mógł pisać.");
+        }
+
     }
 
 }
